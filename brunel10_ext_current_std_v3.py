@@ -130,26 +130,25 @@ def sim(p_within, p_between, g, nu_ext_over_nu_thr, J, sim_time, plotting_flags,
     C_total = np.maximum(C_intra, C_between)
     
     N = len(C_total)
-    N_E = N / 2
-    
     tau = 20 * ms    
     v_threshold = -50 * mV 
     v_reset = -70*mV      
     v_rest = -65*mV    
     J = J * mV    
-    D = 1.5 * ms     
-    C_E = p_within * N_E    
-    C_ext = int(C_E)    
-    v_diff = v_threshold - v_rest   
-    nu_thr = v_diff / (J * C_E * tau)
+    D = 1.5 * ms   
+            
+    # N_E = N / 2
+    # C_E = p_within * N_E    
+    # C_ext = int(C_E)    
+    # v_diff = v_threshold - v_rest   
+    # nu_thr = v_diff / (J * C_E * tau)
     defaultclock.dt = 0.1 * ms  
     
     neurons = NeuronGroup(
         N,
         '''
-        dv/dt = (v_rest-v+v_ext+I_ext)/tau : volt (unless refractory)
+        dv/dt = (v_rest-v+v_ext)/tau : volt (unless refractory)
         v_ext = v0 * sin(2 * pi * f * t + phi) : volt
-        I_ext : volt
         v0 : volt
         f : Hz
         phi : 1
@@ -206,7 +205,7 @@ def sim(p_within, p_between, g, nu_ext_over_nu_thr, J, sim_time, plotting_flags,
         if len(syn_idx) > 0:
             exc_synapses.w[syn_idx[0]] = 1
     
-    nu_ext_group1 = nu_ext_over_nu_thr * nu_thr
+    # nu_ext_group1 = nu_ext_over_nu_thr * nu_thr
     
     # external_poisson_input_1 = PoissonInput(
     #     target=neurons,
@@ -275,7 +274,7 @@ def sim(p_within, p_between, g, nu_ext_over_nu_thr, J, sim_time, plotting_flags,
             neuron_spike_counts = np.sum(filtered_spike_indices == neuron)
             neuron_spike_counts_per_window[neuron].append(neuron_spike_counts)
 
-    avg_neuron_spikes_cluster2_list = avg_neuron_spikes_cluster2_list[1:] 
+    # avg_neuron_spikes_cluster2_list = avg_neuron_spikes_cluster2_list[1:] # чтобы не учитывать 1 окно (шаг)
 
     time_window_centers = (bins[:-1] + bins[1:]) / 2
     
