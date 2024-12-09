@@ -10,7 +10,7 @@ import os
 # Установка параметров вывода NumPy для отображения всех элементов массивов
 np.set_printoptions(threshold=np.inf)
 
-directory_path = 'results_ext'
+directory_path = 'results_ext_inh'
 if os.path.exists(directory_path):
     print(f"Директория '{directory_path}' существует")
 else:
@@ -130,6 +130,7 @@ def sim(p_within, p_between, g, nu_ext_over_nu_thr, J, sim_time, plotting_flags,
     C_total = np.maximum(C_intra, C_between)
     
     N = len(C_total)
+    N_E = N / 2
     tau = 20 * ms    
     v_threshold = -50 * mV 
     v_reset = -70*mV      
@@ -137,7 +138,6 @@ def sim(p_within, p_between, g, nu_ext_over_nu_thr, J, sim_time, plotting_flags,
     J = J * mV    
     D = 1.5 * ms     
 
-    # N_E = N / 2
     # C_E = p_within * N_E    
     # C_ext = int(C_E)    
     # v_diff = v_threshold - v_rest  
@@ -176,6 +176,7 @@ def sim(p_within, p_between, g, nu_ext_over_nu_thr, J, sim_time, plotting_flags,
         dApost/dt = -Apost / tau_stdp : 1 (event-driven)
         w : 1
         '''
+        ############# Возбуждающие и тормозные
         exc_synapses = Synapses(neurons, neurons,
                                 model=stdp_eqs,
                                 on_pre="""    
@@ -188,22 +189,51 @@ def sim(p_within, p_between, g, nu_ext_over_nu_thr, J, sim_time, plotting_flags,
                                 w = clip(w + Apre, 0, 1)
                                 """,
                                 delay=D)
+        inhib_synapses = Synapses(neurons, neurons, 
+                                model=stdp_eqs, 
+                                on_pre="""    
+                                v_post += J * w
+                                Apre += Aplus
+                                w = clip(w + Apost, 0, 1)
+                                """,
+                                on_post="""    
+                                Apost += Aminus
+                                w = clip(w + Apre, 0, 1)
+                                """,
+                                delay=D)
     else:
         exc_synapses = Synapses(neurons, neurons,
-                                model='w : 1',
-                                on_pre='v += J * w',
+                                model="w : 1",
+                                on_pre="v_post += -g * J * w",
                                 delay=D)
-    
-    exc_synapses.connect(condition='i != j')
-    
+        inhib_synapses = Synapses(neurons, neurons, 
+                                model="w : 1", 
+                                on_pre="v_post += -g * J * w", 
+                                delay=D)
+
+
+    exc_synapses.connect(condition='i != j and i < N_E')
+    inhib_synapses.connect(condition='i != j and i >= N_E')
+
+
     sources, targets = C_total.nonzero()
-    exc_synapses.w[:, :] = 0
+    exc_synapses.w[:, :] = 0  # Обнуляем все веса
+    inhib_synapses.w[:, :] = 0  # Обнуляем все веса
+    # Устанавливаем веса в соответствии с начальной матрицей связности
     for idx in range(len(sources)):
         i = sources[idx]
         j = targets[idx]
-        syn_idx = np.where((exc_synapses.i == i) & (exc_synapses.j == j))[0]
-        if len(syn_idx) > 0:
-            exc_synapses.w[syn_idx[0]] = 1
+        if i < N_E:
+            # Возбуждающий синапс
+            syn_idx = np.where((exc_synapses.i == i) & (exc_synapses.j == j))[0]
+            if len(syn_idx) > 0:
+                exc_synapses.w[syn_idx[0]] = 1
+        else:
+            # Тормозный синапс
+            syn_idx = np.where((inhib_synapses.i == i) & (inhib_synapses.j == j))[0]
+            if len(syn_idx) > 0:
+                inhib_synapses.w[syn_idx[0]] = 1
+
     
     # nu_ext_group1 = nu_ext_over_nu_thr * nu_thr
     
@@ -379,6 +409,7 @@ def sim(p_within, p_between, g, nu_ext_over_nu_thr, J, sim_time, plotting_flags,
         connectivity2 = plotting_flags['connectivity2']
         W = np.zeros((n_neurons, n_neurons))
         W[exc_synapses.i[:], exc_synapses.j[:]] = exc_synapses.w[:]
+        W[inhib_synapses.i[:], inhib_synapses.j[:]] = inhib_synapses.w[:]
         connectivity2.set_title(f'Weight Matrix\nSTDP={"On" if use_stdp else "Off"}', fontsize=16)
         connectivity2.matshow(W, cmap='viridis')
 
@@ -399,10 +430,9 @@ D = 1.5 * ms
 rate_tick_step = 50
 t_range = [0, 1000]
 rate_range = [0, 200]
-oscillation_frequencies = [10,20]  
+oscillation_frequencies = [10, 20]  
 use_stdp_values = [False, True]  
 V0_values = np.arange(100, 310, 100)
-# V0_values = [100]
 time_window_size = 100  # in ms
 
 plot_spikes = True
@@ -436,6 +466,7 @@ for current_time in simulation_times:
                 for p_within_idx, p_within in enumerate(p_within_values):
                     images = []
                     p_between_values = np.arange(0.05, p_within - 0.04, 0.1)
+                    # p_between_values = np.arange(0.55, p_within - 0.04, 0.1)
                     C_total_prev = None
                     p_within_prev = None
                     p_between_prev = None
@@ -537,7 +568,7 @@ for current_time in simulation_times:
                             plt.close(fig)
 
                     if images:
-                        imageio.mimsave(f'results_ext/gif_exc_V0_{V0_value}freq_{oscillation_frequency}_STDP_{"On" if use_stdp else "Off"}_p_within_{p_within:.2f}_Time_{current_time}ms.gif', images, duration=3000, loop=0)
+                        imageio.mimsave(f'results_ext_inh/gif_exc_inh_V0_{V0_value}freq_{oscillation_frequency}_STDP_{"On" if use_stdp else "Off"}_p_within_{p_within:.2f}_Time_{current_time}ms.gif', images, duration=3000, loop=0)
 
                 print(f"Симуляции для V0 = {V0_value} мВ, Time={current_time} ms завершены.")
 
@@ -566,7 +597,7 @@ for current_time in simulation_times:
                 
                 plt.tight_layout()
                 
-                plt.savefig(f'results_ext/average_spike_dependency_ext_V0_{V0_value}mV_freq_{oscillation_frequency}Hz_STDP_{"On" if use_stdp else "Off"}_Time_{current_time}ms.png')
+                plt.savefig(f'results_ext_inh/average_spike_dependency_ext_inh_V0_{V0_value}mV_freq_{oscillation_frequency}Hz_STDP_{"On" if use_stdp else "Off"}_Time_{current_time}ms.png')
                 plt.close(fig_spike_dependency)
 
 print("Генерация графиков завершена.")
