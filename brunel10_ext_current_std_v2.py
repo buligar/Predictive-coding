@@ -394,7 +394,7 @@ rate_range = [0, 200]
 oscillation_frequencies = [10, 20]  # Frequencies in Hz
 use_stdp_values = [False, True]  # Whether to use STDP
 V0_values = np.arange(10, 5100, 100)  # От 10 мВ до 100 мВ с шагом 10 мВ
-time_window_size = 100  # in ms
+time_window_size = 1000  # in ms
 
 # Флаги для контроля отрисовки графиков
 plot_spikes = True
