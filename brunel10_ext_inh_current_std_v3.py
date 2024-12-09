@@ -190,21 +190,13 @@ def sim(p_within, p_between, g, nu_ext_over_nu_thr, J, sim_time, plotting_flags,
                                 """,
                                 delay=D)
         inhib_synapses = Synapses(neurons, neurons, 
-                                model=stdp_eqs, 
-                                on_pre="""    
-                                v_post += J * w
-                                Apre += Aplus
-                                w = clip(w + Apost, 0, 1)
-                                """,
-                                on_post="""    
-                                Apost += Aminus
-                                w = clip(w + Apre, 0, 1)
-                                """,
-                                delay=D)
+                              model="w : 1", 
+                              on_pre="v_post += -g * J * w", 
+                              delay=D)
     else:
         exc_synapses = Synapses(neurons, neurons,
                                 model="w : 1",
-                                on_pre="v_post += -g * J * w",
+                                on_pre="v_post += J * w",
                                 delay=D)
         inhib_synapses = Synapses(neurons, neurons, 
                                 model="w : 1", 
