@@ -403,7 +403,7 @@ oscillation_frequencies = [10,20]
 use_stdp_values = [False, True]  
 V0_values = np.arange(100, 310, 100)
 # V0_values = [100]
-time_window_size = 100  # in ms
+time_window_size = 1000  # in ms
 
 plot_spikes = True
 plot_avg_spikes = False
