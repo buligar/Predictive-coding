@@ -116,7 +116,6 @@ def plot_connectivity(n_neurons, exc_synapses, inhib_synapses, connectivity2, us
 
     connectivity2.set_title(f'Weight Matrix\nSTDP={"On" if use_stdp else "Off"}', fontsize=16)
     connectivity2.matshow(W, cmap='viridis')
-    # connectivity2.legend(loc='upper right', fontsize='small')
 
 
 def print_centrality(C_total, cluster_nodes, p_input, measure_name):
@@ -142,50 +141,56 @@ def print_centrality(C_total, cluster_nodes, p_input, measure_name):
     list
         Список индексов узлов, являющихся топ-узлами по заданной метрике (только внутри кластера).
     """
-    graph_centrality = GraphCentrality(C_total)
+    if measure_name != 'random':
+        graph_centrality = GraphCentrality(C_total)
 
-    # Сопоставление названий метрик с соответствующими методами
-    measure_func_map = {
-        "betweenness": graph_centrality.calculate_betweenness_centrality,
-        "eigenvector": graph_centrality.calculate_eigenvector_centrality,
-        "pagerank": graph_centrality.calculate_pagerank_centrality,
-        "flow": graph_centrality.calculate_flow_coefficient,
-        "degree": graph_centrality.calculate_degree_centrality,
-        "closeness": graph_centrality.calculate_closeness_centrality,
-        "harmonic": graph_centrality.calculate_harmonic_centrality,
-        "percolation": graph_centrality.calculate_percolation_centrality,
-        "cross_clique": graph_centrality.calculate_cross_clique_centrality
-    }
-        
-    if measure_name not in measure_func_map:
-        raise ValueError(
-            f"Метрика '{measure_name}' не поддерживается. "
-            f"Доступные метрики: {list(measure_func_map.keys())}."
+        # Сопоставление названий метрик с соответствующими методами
+        measure_func_map = {
+            "betweenness": graph_centrality.calculate_betweenness_centrality,
+            "eigenvector": graph_centrality.calculate_eigenvector_centrality,
+            "pagerank": graph_centrality.calculate_pagerank_centrality,
+            "flow": graph_centrality.calculate_flow_coefficient,
+            "degree": graph_centrality.calculate_degree_centrality,
+            "closeness": graph_centrality.calculate_closeness_centrality,
+            "harmonic": graph_centrality.calculate_harmonic_centrality,
+            "percolation": graph_centrality.calculate_percolation_centrality,
+            "cross_clique": graph_centrality.calculate_cross_clique_centrality
+        }
+            
+        if measure_name not in measure_func_map:
+            raise ValueError(
+                f"Метрика '{measure_name}' не поддерживается. "
+                f"Доступные метрики: {list(measure_func_map.keys())}."
+            )
+
+        measure_values = measure_func_map[measure_name]()
+        for node in measure_values:
+            measure_values[node] = round(measure_values[node], 5)
+
+        if isinstance(cluster_nodes, int):
+            cluster_list = list(range(cluster_nodes))
+        else:
+            cluster_list = list(cluster_nodes)
+
+        measure_values_cluster = {
+            node: measure_values[node] 
+            for node in cluster_list
+            if node in measure_values
+        }
+        top_k = int(p_input * len(cluster_list))
+        sorted_neurons_cluster = sorted(
+            measure_values_cluster,
+            key=lambda n: measure_values_cluster[n],
+            reverse=True
         )
+        top_neurons = sorted_neurons_cluster[:top_k]
 
-    measure_values = measure_func_map[measure_name]()
-    for node in measure_values:
-        measure_values[node] = round(measure_values[node], 5)
-
-    if isinstance(cluster_nodes, int):
-        cluster_list = list(range(cluster_nodes))
     else:
-        cluster_list = list(cluster_nodes)
+        cluster1_indices = np.arange(0, cluster_nodes)
+        num_chosen = int(p_input * len(cluster1_indices))
+        top_neurons = np.random.choice(cluster1_indices, size=num_chosen, replace=False)
 
-    measure_values_cluster = {
-        node: measure_values[node] 
-        for node in cluster_list
-        if node in measure_values
-    }
-    top_k = int(p_input * len(cluster_list))
-    sorted_neurons_cluster = sorted(
-        measure_values_cluster,
-        key=lambda n: measure_values_cluster[n],
-        reverse=True
-    )
-    top_neurons = sorted_neurons_cluster[:top_k]
-    
-    print("счет топ центральности")
+
     return top_neurons
 
 
@@ -300,7 +305,7 @@ def plot_avg_spike_dependency(
     )
     plt.savefig(fig_filename)
     plt.close(fig_spike_dependency)
-    print(f"График зависимости среднего числа спайков сохранён: {fig_filename}")
+    # print(f"График зависимости среднего числа спайков сохранён: {fig_filename}")
 
     # Сохраняем данные в CSV
     csv_filename = os.path.join(
@@ -312,7 +317,7 @@ def plot_avg_spike_dependency(
         writer = csv.writer(csvfile, delimiter=';')
         for row in data_for_csv:
             writer.writerow(row)
-    print(f"CSV-файл со средними значениями спайков сохранён: {csv_filename}")
+    # print(f"CSV-файл со средними значениями спайков сохранён: {csv_filename}")
 
 
 def plot_3d_spike_data(
@@ -414,7 +419,7 @@ def plot_3d_spike_data(
         ax_3d.set_xlabel('Time [ms]')
         ax_3d.set_ylabel('p_between')
         ax_3d.set_zlabel('Avg Spikes in 100 ms window')
-        ax_3d.set_zlim(0,10)
+        ax_3d.set_zlim(0,30)
         ax_3d.set_title(
             f'3D Surface: Time vs p_between vs Avg Spikes\n'
             f'I0={I0_value}pA, freq={oscillation_frequency}Hz, STDP={"On" if use_stdp else "Off"}, '
@@ -432,7 +437,7 @@ def plot_3d_spike_data(
         )
         plt.savefig(fig_filename_3d)
         plt.close(fig_3d)
-        print(f"3D-график сохранён: {fig_filename_3d}")
+        # print(f"3D-график сохранён: {fig_filename_3d}")
 
 
 import os
@@ -486,10 +491,8 @@ def plot_pinput_between_avg_spikes_with_std(
     measure_name : str
         Дополнительное имя метрики (добавляется в название файла).
     """
-
     print("spike_counts_second_cluster_for_input", spike_counts_second_cluster_for_input)
     print("spike_counts_second_cluster", spike_counts_second_cluster)
-
     # Проверяем наличие данных для заданного I0_value
     data_for_v0 = spike_counts_second_cluster_for_input.get(I0_value, {})
     if not data_for_v0:
@@ -579,10 +582,13 @@ def plot_pinput_between_avg_spikes_with_std(
             edgecolor='none',
             alpha=0.9
         )
-
+        
         # Добавляем «коридор» стандартного отклонения: mean ± std
         Z_plus = Z + Z_std
         Z_minus = Z - Z_std
+        # print("Z", Z)
+        # print("Z_plus", Z_plus)
+        # print("Z_minus", Z_minus)
         # Чтобы не загромождать график, используем полупрозрачный однотонный цвет
         ax.plot_surface(
             p_input_mesh,
@@ -596,7 +602,7 @@ def plot_pinput_between_avg_spikes_with_std(
             p_input_mesh,
             p_between_mesh,
             Z_minus,
-            color='red',
+            color='blue',
             alpha=0.3,
             edgecolor='none'
         )
@@ -607,7 +613,7 @@ def plot_pinput_between_avg_spikes_with_std(
             f'p_within={p_within_str}, Time={current_time}ms, Bin={time_window_size}ms, {measure_name}',
             fontsize=14
         )
-        ax.set_zlim(0, max(10, np.nanmax(Z_plus)))
+        ax.set_zlim(0, 30)
         ax.set_xlabel('p_input', fontsize=12)
         ax.set_ylabel('p_between', fontsize=12)
         ax.set_zlabel('avg_spikes', fontsize=12)
@@ -623,5 +629,5 @@ def plot_pinput_between_avg_spikes_with_std(
         )
         plt.savefig(filename, dpi=150)
         plt.close(fig)
-        print(f"[plot_pinput_between_avg_spikes_with_std] График сохранён: {filename}")
+        # print(f"[plot_pinput_between_avg_spikes_with_std] График сохранён: {filename}")
 

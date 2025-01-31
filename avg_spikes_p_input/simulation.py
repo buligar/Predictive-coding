@@ -14,11 +14,11 @@ from plotting_and_saving import (
     plot_spectrogram, plot_connectivity, print_centrality
 )
 
-def sim(p_within, p_between, g, nu_ext_over_nu_thr, J, J2, refractory_period, sim_time, plotting_flags,
+def sim(C_intra_first, C_between_first, p_within, p_between, g, nu_ext_over_nu_thr, J, J2, refractory_period, sim_time, plotting_flags,
         rate_tick_step, t_range, rate_range, cluster_labels, cluster_sizes,
         I0_value, oscillation_frequency, use_stdp, time_window_size,
         C_total_prev=None, p_within_prev=None, p_between_prev=None,
-        p_input=None, measure_name=None, centrality=None):
+        p_input=None, measure_name=None, measure_name_prev=None, centrality=None):
     """
     Выполняет один прогон симуляции при заданных параметрах.
     Если C_total_prev=None, генерируем матрицу "с нуля",
@@ -34,19 +34,24 @@ def sim(p_within, p_between, g, nu_ext_over_nu_thr, J, J2, refractory_period, si
 
     n_neurons = len(cluster_labels)
 
+
     # -- Генерация/обновление матрицы связей --
     if C_total_prev is None:
         # генерируем "пустую" структуру и обновляем
-        C_intra = gensbm2(n_neurons, cluster_labels, 0.01, cluster_sizes, directed=False)
-        C_between = generate_constant_inter_cluster(n_neurons, cluster_labels, 0.01, directed=False)
+        C_intra_first = gensbm2(n_neurons, cluster_labels, 0.01, cluster_sizes, directed=False)
+        C_between_first = generate_constant_inter_cluster(n_neurons, cluster_labels, 0.01, directed=False)
+        C_intra = update_intra_cluster_connectivity(C_intra_first, cluster_labels, p_within)
+        C_between = update_inter_cluster_connectivity(C_between_first, cluster_labels, p_between)
     else:
-        # берём предыдущую матрицу и дальше "докручиваем"
-        C_intra = C_total_prev.copy()
-        C_between = C_total_prev.copy()
-
-    # Обновляем матрицу в соответствии с p_within, p_between
-    C_intra = update_intra_cluster_connectivity(C_intra, cluster_labels, p_within)
-    C_between = update_inter_cluster_connectivity(C_between, cluster_labels, p_between)
+        if measure_name != measure_name_prev:
+            C_intra = C_intra_first
+            C_between = C_between_first
+        else:# берём предыдущую матрицу и дальше "докручиваем"
+            C_intra = C_total_prev.copy()
+            C_between = C_total_prev.copy()
+        C_intra = update_intra_cluster_connectivity(C_intra, cluster_labels, p_within)
+        C_between = update_inter_cluster_connectivity(C_between, cluster_labels, p_between)
+    
 
     C_total = np.maximum(C_intra, C_between)
 
@@ -55,9 +60,9 @@ def sim(p_within, p_between, g, nu_ext_over_nu_thr, J, J2, refractory_period, si
     N = n_neurons
     N_E = int(N * 80 / 100)
     N_I = N - N_E
-    print("N", N)
-    print("N_E", N_E)
-    print("N_I", N_I)
+    # print("N", N)
+    # print("N_E", N_E)
+    # print("N_I", N_I)
     # N_E = 800
     R = 80 * Mohm
     C = 0.25 * nfarad
@@ -92,11 +97,13 @@ def sim(p_within, p_between, g, nu_ext_over_nu_thr, J, J2, refractory_period, si
     if p_input is None:
         p_input = 1.0
 
-    if centrality is None:
+    if centrality is None or measure_name == 'random':
         centrality = print_centrality(C_total, n_cluster_neurons, p_input, measure_name=measure_name)
 
+    if isinstance(centrality, np.ndarray):  # проверяем, является ли объект np.ndarray
+        centrality = centrality.tolist()
     centrality = sorted(centrality)
-    print('Топ нейронов',centrality)
+    # print('Топ нейронов',centrality)
 
     # Выбираем int(p_input * 50) нейронов из 0..49, даём им синус
     # Шаг 5. Назначаем нужную модуляцию (частоту, ток, фазу) выбранным нейронам
@@ -107,16 +114,7 @@ def sim(p_within, p_between, g, nu_ext_over_nu_thr, J, J2, refractory_period, si
     else:
         print("Список выбранных нейронов пуст — пропускаем назначение модуляции.")
 
-    # cluster1_indices = np.arange(0, n_cluster_neurons)
-    # num_chosen = int(p_input * len(cluster1_indices))
-    # chosen_indices = np.random.choice(cluster1_indices, size=num_chosen, replace=False)
-
-    # # print(chosen_indices)
-    # neurons.f[chosen_indices] = oscillation_frequency * Hz
-    # neurons.I0[chosen_indices] = I0_value * pA
-    # neurons.phi[chosen_indices] = 0
-
-    input_rate = 50 * Hz
+    input_rate = 30 * Hz
     input_group = PoissonGroup(n_neurons, rates=input_rate)
     syn_input = Synapses(input_group, neurons, on_pre='v_post += J', delay=D)
     syn_input.connect(condition='i >= 0 and j < n_cluster_neurons', p=p_input)
@@ -214,18 +212,18 @@ def sim(p_within, p_between, g, nu_ext_over_nu_thr, J, J2, refractory_period, si
     if plotting_flags.get('trace', False):
         trace = StateMonitor(neurons, 'v', record=True)
 
-    print(f"Количество нейронов: {N}")
-    print(f"Количество возбуждающих синапсов: {exc_synapses.N}")
-    print(f"Количество тормозных синапсов: {inh_synapses.N}")
+    # print(f"Количество нейронов: {N}")
+    # print(f"Количество возбуждающих синапсов: {exc_synapses.N}")
+    # print(f"Количество тормозных синапсов: {inh_synapses.N}")
 
     # Запуск
     run(sim_time, profile=True)
 
     # Профилирование
-    print(profiling_summary(show=5))
+    # print(profiling_summary(show=5))
     end_time = time.time()
     duration = end_time - start_time
-    print(f"Testing completed in {duration:.2f} seconds.")
+    # print(f"Testing completed in {duration:.2f} seconds.")
 
     # Анализ спайков
     spike_times = spike_monitor.t / ms
@@ -291,5 +289,5 @@ def sim(p_within, p_between, g, nu_ext_over_nu_thr, J, J2, refractory_period, si
         connectivity2 = plotting_flags['connectivity2']
         plot_connectivity(n_neurons, exc_synapses, inh_synapses, connectivity2, use_stdp, centrality)
 
-    return avg_neuron_spikes_cluster2_list, time_window_centers, C_total, spike_indices, centrality
+    return avg_neuron_spikes_cluster2_list, time_window_centers, C_total, spike_indices, centrality, C_intra_first, C_between_first
 

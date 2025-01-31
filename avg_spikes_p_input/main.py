@@ -37,10 +37,10 @@ cluster_sizes = [250, 250]
 
 # Основные диапазоны параметров
 # p_within_values = np.arange(0.60, 0.61, 0.1)  # [0.7, 0.8, 0.9, 1.0]
-p_within_values = np.arange(0.15, 0.16, 0.05)  # [0.7, 0.8, 0.9, 1.0]
-p_input_values = np.arange(0.05, 0.21, 0.05)
+p_within_values = np.arange(0.2, 0.41, 0.05)  # [0.7, 0.8, 0.9, 1.0]
+p_input_values = np.arange(0.01, 0.51, 0.1)
 
-num_tests = 1
+num_tests = 5
 J = 0.3
 J2 = 0.3
 g = 4.5
@@ -89,12 +89,12 @@ simulation_times = [1000]
 #     "closeness",
 #     "harmonic",
 #     "percolation",
-#     "cross_clique"
+#     "cross_clique",
+#     "random"
 # ]
 
 measure_names = [
-    "betweenness",
-    "closeness"
+    "random",
 ]
 
 # -- Основной цикл по времени симуляции --
@@ -136,15 +136,18 @@ for current_time in simulation_times:
                     for p_input in p_input_values:
                         p_input = round(p_input, 2)
                         p_input_str = f"{p_input:.2f}"
+                        measure_name_prev = None
+                        C_total_prev = None
+                        C_intra_first = None
+                        C_between_first = None
                         for measure_name in measure_names:
                             centrality = None
-                            C_total_prev = None
                             p_within_prev = None
                             p_between_prev = None
                             spike_counts_second_cluster_for_input[I0_value][p_within_str][p_input_str] = {}
                             # Список для хранения кадров (GIF), если нужно
                             images = []
-                            p_between_values = np.arange(0.01, p_within, 0.04)
+                            p_between_values = np.arange(0.05, p_within, 0.05)
                             # -- Цикл по p_between --
                             for p_between in p_between_values:
                                 p_between = round(p_between, 3)
@@ -220,12 +223,16 @@ for current_time in simulation_times:
                                             plotting_flags['ax_psd2'].clear()
                                         if plot_spectrogram:
                                             plotting_flags['ax_spectrogram'].clear()
+                                        if plot_connectivity2:
+                                            plotting_flags['connectivity2'].clear()
 
                                     # -- Вызов функции симуляции --
                                     (avg_neuron_spikes_cluster2_list,
                                     time_window_centers,
                                     C_total,
-                                    spike_indices, centrality) = sim(
+                                    spike_indices, centrality, C_intra_first, C_between_first) = sim(
+                                        C_intra_first,
+                                        C_between_first,
                                         p_within,
                                         p_between,
                                         g,
@@ -249,6 +256,7 @@ for current_time in simulation_times:
                                         p_between_prev,
                                         p_input=p_input,
                                         measure_name=measure_name,
+                                        measure_name_prev = measure_name_prev,
                                         centrality=centrality
                                     )
 
@@ -275,6 +283,7 @@ for current_time in simulation_times:
                                     p_within_prev = p_within
                                     p_between_prev = p_between
                                     centrality_prev = centrality
+                                    measure_name_prev = measure_name
 
                                 detailed_spike_data_for_3d[I0_value][p_within_str][p_between] = {
                                     "time": time_for_3d_time if time_for_3d_time is not None else np.array([]),
@@ -314,7 +323,7 @@ for current_time in simulation_times:
 
                             # Конец циклов по p_within и p_input
 
-                            print(f"\nСимуляции для I0 = {I0_value} pA, Time={current_time} ms завершены.")
+                            # print(f"\nСимуляции для I0 = {I0_value} pA, Time={current_time} ms завершены.")
 
                             # -- Строим «старые» графики --
                             plot_avg_spike_dependency(
