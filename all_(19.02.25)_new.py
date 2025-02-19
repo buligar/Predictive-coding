@@ -540,7 +540,7 @@ def print_centrality(C_total, cluster_nodes, p_input, measure_name):
             reverse=True
         )
         # print("sorted_neurons_cluster", sorted_neurons_cluster)
-        # top_neurons = sorted_neurons_cluster[:top_k]
+        top_neurons = sorted_neurons_cluster[:top_k]
         # top_neurons = sorted_neurons_cluster[-top_k:]
         # print(top_neurons)
         # print(last_neurons)
